@@ -12,13 +12,13 @@ const App: React.FC = () => {
   // State for inputs and configurations
   const [sourceContent, setSourceContent] = useState('');
   const [systemInstruction, setSystemInstruction] = useState(DEFAULT_SYSTEM_INSTRUCTION);
-  const [targetAudience, setTargetAudience] = useState<TargetAudience>(TargetAudience.Adults);
+  const [targetAudience, setTargetAudience] = useState<TargetAudience>(TargetAudience.None);
   const [bloomLevel, setBloomLevel] = useState<BloomLevel>(BloomLevel.Understand);
-  const [duration, setDuration] = useState<Duration>(Duration.Short);
-  const [style, setStyle] = useState<Style>(Style.Formal);
-  const [tone, setTone] = useState<Tone>(Tone.Neutral);
-  const [languageLevel, setLanguageLevel] = useState<LanguageLevel>(LanguageLevel.Intermediate);
-  const [feedbackType, setFeedbackType] = useState<FeedbackType>(FeedbackType.Explanatory);
+  const [duration, setDuration] = useState<Duration>(Duration.None);
+  const [style, setStyle] = useState<Style>(Style.None);
+  const [tone, setTone] = useState<Tone>(Tone.None);
+  const [languageLevel, setLanguageLevel] = useState<LanguageLevel>(LanguageLevel.None);
+  const [feedbackType, setFeedbackType] = useState<FeedbackType>(FeedbackType.None);
   
   // State for generation process and results
   const [generatedResources, setGeneratedResources] = useState<Partial<GeneratedResources>>({});

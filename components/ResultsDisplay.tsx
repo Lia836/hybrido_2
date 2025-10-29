@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GeneratedResources, ResourceKey } from '../types';
+import { GeneratedResources, PedagogyMetadata, ResourceKey } from '../types';
 import { LoaderIcon, SparklesIcon, CopyIcon, DownloadIcon, FileJsonIcon, FileTextIcon, ImageIcon, FileArchiveIcon } from './icons';
 
 interface ResultsDisplayProps {
@@ -42,42 +42,85 @@ const ExportButton: React.FC<{ label: string; icon: React.ReactNode; onClick: ()
   </button>
 );
 
+const formatFurtherReadingForCopy = (fr: PedagogyMetadata['furtherReading']): string => {
+    let text = `\n\n--- Pour aller plus loin ---\n`;
+    if (fr.bibliography?.length > 0) {
+        text += `\nBibliographie (Format APA):\n${fr.bibliography.join('\n')}`;
+    }
+    if (fr.applicationIdeas?.length > 0) {
+        text += `\n\nPistes d'application:\n- ${fr.applicationIdeas.join('\n- ')}`;
+    }
+    return text;
+}
 
 // Formatting functions
-// FIX: Implemented the formatQuizForCopy function to return a string representation of the quiz.
 const formatQuizForCopy = (quiz: GeneratedResources['quiz']): string => {
-    let text = `${quiz.title}\n\n`;
+    let text = `${quiz.title}\nVerbe d'action: ${quiz.actionVerb}\n\n`;
     quiz.questions.forEach((q, index) => {
         text += `Question ${index + 1}: ${q.questionText}\n`;
-        q.options.forEach((opt) => {
-            text += `  - ${opt}\n`;
+        q.options.forEach((opt, i) => {
+            text += `  - ${i === q.correctAnswerIndex ? '[X]' : '[ ]'} ${opt}\n`;
         });
-        text += `Réponse correcte: ${q.options[q.correctAnswerIndex]}\n`;
         text += `Explication: ${q.explanation}\n\n`;
     });
+    text += formatFurtherReadingForCopy(quiz.furtherReading);
     return text;
 };
-const formatCaseStudyForCopy = (cs: GeneratedResources['caseStudy']): string => `${cs.title}\n\nScénario:\n${cs.scenario}\n\nQuestions de réflexion:\n${cs.questions.join('\n')}`;
+const formatCaseStudyForCopy = (cs: GeneratedResources['caseStudy']): string => {
+    let text = `${cs.title}\nVerbe d'action: ${cs.actionVerb}\n\n`;
+    text += `Scénario:\n${cs.scenario}\n\n`;
+    text += `Questions de réflexion:\n- ${cs.questions.join('\n- ')}`;
+    text += formatFurtherReadingForCopy(cs.furtherReading);
+    return text;
+}
 const formatInfographicForCopy = (info: GeneratedResources['infographic']): string => {
-    let text = `${info.title}\n\n`;
+    let text = `${info.title}\nVerbe d'action: ${info.actionVerb}\n\n`;
     info.sections.forEach(sec => {
         text += `${sec.header}:\n`;
         sec.points.forEach(p => text += `  - ${p}\n`);
         text += '\n';
     });
+    text += formatFurtherReadingForCopy(info.furtherReading);
     return text;
 };
-// FIX: Implemented the formatVideoScriptForCopy function to return a string representation of the video script.
 const formatVideoScriptForCopy = (vs: GeneratedResources['videoScript']): string => {
-    let text = `Titre: ${vs.title}\n\n`;
+    let text = `Titre: ${vs.title}\nVerbe d'action: ${vs.actionVerb}\n\n`;
     vs.scenes.forEach(scene => {
         text += `--- Scène ${scene.sceneNumber} ---\n`;
         text += `Visuel: ${scene.visuals}\n`;
         text += `Narration: ${scene.narration}\n\n`;
     });
+    text += formatFurtherReadingForCopy(vs.furtherReading);
     return text;
 };
-const formatActivityForCopy = (act: GeneratedResources['collaborativeActivity']): string => `${act.title}\n\nObjectif: ${act.objective}\n\nInstructions:\n${act.instructions}\n\nDurée: ${act.duration}`;
+const formatActivityForCopy = (act: GeneratedResources['collaborativeActivity']): string => {
+    let text = `${act.title}\nVerbe d'action: ${act.actionVerb}\n\n`;
+    text += `Objectif: ${act.objective}\n\n`;
+    text += `Instructions:\n${act.instructions}\n\n`;
+    text += `Durée: ${act.duration}`;
+    text += formatFurtherReadingForCopy(act.furtherReading);
+    return text;
+}
+const formatEvaluationForCopy = (evalData: GeneratedResources['evaluation']): string => {
+    let text = `${evalData.title} (${evalData.evaluationType})\nVerbe d'action: ${evalData.actionVerb}\n\n`;
+    text += `Instructions:\n${evalData.instructions}\n\n`;
+    evalData.questions.forEach((q, index) => {
+        text += `--- Question ${index + 1} (${q.questionType}) ---\n`;
+        text += `${q.questionText}\n`;
+        if (q.questionType === 'QCM' && q.options) {
+            q.options.forEach(opt => text += `  - [ ] ${opt}\n`);
+        }
+        if (q.correctAnswer) {
+            text += `Réponse attendue: ${q.correctAnswer}\n`;
+        }
+        if (q.explanation) {
+            text += `Explication: ${q.explanation}\n`;
+        }
+        text += `\n`;
+    });
+    text += formatFurtherReadingForCopy(evalData.furtherReading);
+    return text;
+};
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ resources, isLoading, generatingType, error, onGenerate, onGenerateImage, infographicImage }) => {
   const [activeTab, setActiveTab] = useState<ResourceKey>('quiz');
@@ -87,7 +130,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ resources, isLoading, g
     { id: 'caseStudy', label: 'Cas Pratique' },
     { id: 'infographic', label: 'Infographie' },
     { id: 'videoScript', label: 'Script Vidéo' },
-    { id: 'collaborativeActivity', label: 'Activité Collaborative' },
+    { id: 'collaborativeActivity', label: 'Activité Collab.' },
+    { id: 'evaluation', label: 'Évaluation' },
   ];
 
   const renderContent = () => {
@@ -113,7 +157,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ resources, isLoading, g
             disabled={isLoading}
             className="mt-6 inline-flex items-center px-6 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600"
           >
-            Générer le {tabs.find(t=>t.id === activeTab)?.label}
+            Générer {tabs.find(t=>t.id === activeTab)?.label}
           </button>
         </div>
       );
@@ -125,6 +169,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ resources, isLoading, g
       case 'infographic': return <InfographicContent infographic={resource as GeneratedResources['infographic']} onGenerateImage={onGenerateImage} isLoadingImage={isLoading && generatingType === 'image'} infographicImage={infographicImage} />;
       case 'videoScript': return <VideoScriptContent videoScript={resource as GeneratedResources['videoScript']} />;
       case 'collaborativeActivity': return <CollaborativeActivityContent activity={resource as GeneratedResources['collaborativeActivity']} />;
+      case 'evaluation': return <EvaluationContent evaluation={resource as GeneratedResources['evaluation']} />;
       default: return null;
     }
   };
@@ -162,30 +207,64 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ resources, isLoading, g
   );
 };
 
-// Resource content components...
-const ResourceWrapper: React.FC<{ title: string; textToCopy: string; data: any; children: React.ReactNode }> = ({ title, textToCopy, data, children }) => {
-    const downloadJson = () => {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+// Reusable components for displaying results
+const FurtherReadingComponent: React.FC<{ furtherReading: PedagogyMetadata['furtherReading'] }> = ({ furtherReading }) => (
+    <div className="mt-6 pt-4 border-t border-gray-700">
+        <h4 className="text-lg font-semibold text-gray-300 mb-3">Pour aller plus loin</h4>
+        {furtherReading.bibliography && furtherReading.bibliography.length > 0 && (
+            <div>
+                <h5 className="font-semibold text-gray-400">Bibliographie (Format APA)</h5>
+                <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
+                    {furtherReading.bibliography.map((item, i) => <li key={i}>{item}</li>)}
+                </ul>
+            </div>
+        )}
+        {furtherReading.applicationIdeas && furtherReading.applicationIdeas.length > 0 && (
+            <div className="mt-4">
+                <h5 className="font-semibold text-gray-400">Pistes d'application</h5>
+                <ul className="mt-2 list-disc list-inside space-y-1 text-sm text-gray-400">
+                    {furtherReading.applicationIdeas.map((item, i) => <li key={i}>{item}</li>)}
+                </ul>
+            </div>
+        )}
+    </div>
+);
+
+const ResourceWrapper: React.FC<{ title: string; actionVerb: string; textToCopy: string; data: any; children: React.ReactNode }> = ({ title, actionVerb, textToCopy, data, children }) => {
+    const downloadFile = (content: string, filename: string, contentType: string) => {
+        const blob = new Blob([content], { type: contentType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${title.toLowerCase().replace(/ /g, '_')}.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    }
+    };
+
+    const downloadJson = () => downloadFile(JSON.stringify(data, null, 2), `${title.toLowerCase().replace(/ /g, '_')}.json`, 'application/json');
+    const downloadTxt = () => downloadFile(textToCopy, `${title.toLowerCase().replace(/ /g, '_')}.txt`, 'text/plain;charset=utf-8');
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-start">
-                <h3 className="text-2xl font-bold text-cyan-400">{title}</h3>
+                <div>
+                    <h3 className="text-2xl font-bold text-cyan-400">{title}</h3>
+                    <p className="text-sm text-cyan-300 font-medium">Verbe d'action : <span className="font-semibold">{actionVerb}</span></p>
+                </div>
                 <CopyButton textToCopy={textToCopy} />
             </div>
+            
             {children}
+            
+            <FurtherReadingComponent furtherReading={data.furtherReading} />
+            
             <div className="mt-8 pt-4 border-t border-gray-700">
                 <h4 className="text-sm font-semibold text-gray-400 mb-3">Options d'export</h4>
                 <div className="flex flex-wrap gap-2">
                     <ExportButton label="JSON" icon={<FileJsonIcon />} onClick={downloadJson} />
+                    <ExportButton label="TXT" icon={<FileTextIcon />} onClick={downloadTxt} />
                     <ExportButton label="PDF" icon={<FileTextIcon />} onClick={() => {}} disabled tooltip="Prochainement" />
                     <ExportButton label="DOCX" icon={<FileTextIcon />} onClick={() => {}} disabled tooltip="Prochainement" />
                     <ExportButton label="SCORM 1.2" icon={<FileArchiveIcon />} onClick={() => {}} disabled tooltip="Fonctionnalité avancée, prochainement" />
@@ -196,9 +275,8 @@ const ResourceWrapper: React.FC<{ title: string; textToCopy: string; data: any; 
     );
 }
 
-// FIX: Implemented the QuizContent component to render the quiz and pass children to ResourceWrapper.
 const QuizContent: React.FC<{ quiz: GeneratedResources['quiz'] }> = ({ quiz }) => (
-    <ResourceWrapper title={quiz.title} textToCopy={formatQuizForCopy(quiz)} data={quiz}>
+    <ResourceWrapper title={quiz.title} actionVerb={quiz.actionVerb} textToCopy={formatQuizForCopy(quiz)} data={quiz}>
         <div className="space-y-4">
             {quiz.questions.map((q, index) => (
                 <div key={index} className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
@@ -219,7 +297,7 @@ const QuizContent: React.FC<{ quiz: GeneratedResources['quiz'] }> = ({ quiz }) =
     </ResourceWrapper>
 );
 const CaseStudyContent: React.FC<{ caseStudy: GeneratedResources['caseStudy'] }> = ({ caseStudy }) => (
-    <ResourceWrapper title={caseStudy.title} textToCopy={formatCaseStudyForCopy(caseStudy)} data={caseStudy}>
+    <ResourceWrapper title={caseStudy.title} actionVerb={caseStudy.actionVerb} textToCopy={formatCaseStudyForCopy(caseStudy)} data={caseStudy}>
         <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
             <h4 className="font-semibold text-gray-300">Scénario</h4>
             <p className="mt-2 whitespace-pre-wrap">{caseStudy.scenario}</p>
@@ -231,7 +309,7 @@ const CaseStudyContent: React.FC<{ caseStudy: GeneratedResources['caseStudy'] }>
     </ResourceWrapper>
 );
 const InfographicContent: React.FC<{ infographic: GeneratedResources['infographic'], onGenerateImage: () => void, isLoadingImage: boolean, infographicImage: string | null }> = ({ infographic, onGenerateImage, isLoadingImage, infographicImage }) => (
-    <ResourceWrapper title={infographic.title} textToCopy={formatInfographicForCopy(infographic)} data={infographic}>
+    <ResourceWrapper title={infographic.title} actionVerb={infographic.actionVerb} textToCopy={formatInfographicForCopy(infographic)} data={infographic}>
         <div className="p-4 bg-gray-900/50 rounded-lg border-l-4 border-cyan-500">
             {infographic.sections.map((section, i) => (
                 <div key={i} className={i > 0 ? "mt-4" : ""}>
@@ -256,9 +334,8 @@ const InfographicContent: React.FC<{ infographic: GeneratedResources['infographi
         </div>
     </ResourceWrapper>
 );
-// FIX: Implemented the VideoScriptContent component to render the video script and pass children to ResourceWrapper.
 const VideoScriptContent: React.FC<{ videoScript: GeneratedResources['videoScript'] }> = ({ videoScript }) => (
-    <ResourceWrapper title={videoScript.title} textToCopy={formatVideoScriptForCopy(videoScript)} data={videoScript}>
+    <ResourceWrapper title={videoScript.title} actionVerb={videoScript.actionVerb} textToCopy={formatVideoScriptForCopy(videoScript)} data={videoScript}>
         <div className="space-y-4">
             {videoScript.scenes.map(scene => (
                 <div key={scene.sceneNumber} className="p-4 bg-gray-900/50 rounded-lg border-l-4 border-cyan-500">
@@ -278,9 +355,8 @@ const VideoScriptContent: React.FC<{ videoScript: GeneratedResources['videoScrip
         </div>
     </ResourceWrapper>
 );
-// FIX: Implemented the CollaborativeActivityContent component to render the activity and pass children to ResourceWrapper.
 const CollaborativeActivityContent: React.FC<{ activity: GeneratedResources['collaborativeActivity'] }> = ({ activity }) => (
-    <ResourceWrapper title={activity.title} textToCopy={formatActivityForCopy(activity)} data={activity}>
+    <ResourceWrapper title={activity.title} actionVerb={activity.actionVerb} textToCopy={formatActivityForCopy(activity)} data={activity}>
         <div className="space-y-4">
              <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
                 <h4 className="font-semibold text-gray-300">Objectif Pédagogique</h4>
@@ -297,5 +373,38 @@ const CollaborativeActivityContent: React.FC<{ activity: GeneratedResources['col
         </div>
     </ResourceWrapper>
 );
+
+const EvaluationContent: React.FC<{ evaluation: GeneratedResources['evaluation'] }> = ({ evaluation }) => (
+    <ResourceWrapper title={evaluation.title} actionVerb={evaluation.actionVerb} textToCopy={formatEvaluationForCopy(evaluation)} data={evaluation}>
+        <div className="space-y-4">
+            <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                <h4 className="font-semibold text-gray-300">Type d'évaluation</h4>
+                <p className="mt-1">{evaluation.evaluationType}</p>
+            </div>
+            <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                <h4 className="font-semibold text-gray-300">Instructions</h4>
+                <p className="mt-2 whitespace-pre-wrap">{evaluation.instructions}</p>
+            </div>
+            {evaluation.questions.map((q, index) => (
+                <div key={index} className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                    <p className="font-semibold text-gray-300">Question {index + 1} <span className="text-xs font-mono bg-gray-700 px-1.5 py-0.5 rounded">{q.questionType}</span></p>
+                    <p className="mt-2">{q.questionText}</p>
+                    {q.questionType === 'QCM' && q.options && (
+                        <ul className="mt-2 space-y-1 text-gray-400">
+                            {q.options.map((opt, i) => <li key={i} className="pl-4">{opt}</li>)}
+                        </ul>
+                    )}
+                    {(q.correctAnswer || q.explanation) && (
+                         <p className="mt-3 text-sm text-gray-500 border-t border-gray-700 pt-2">
+                            {q.correctAnswer && <span className="block"><span className="font-semibold text-gray-400">Réponse attendue :</span> {q.correctAnswer}</span>}
+                            {q.explanation && <span className="block mt-1"><span className="font-semibold text-gray-400">Explication :</span> {q.explanation}</span>}
+                        </p>
+                    )}
+                </div>
+            ))}
+        </div>
+    </ResourceWrapper>
+);
+
 
 export default ResultsDisplay;

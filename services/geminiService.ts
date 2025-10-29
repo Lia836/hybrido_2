@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { GenerationConfig, GeneratedResources, ResourceKey } from "../types";
+import { GenerationConfig, GeneratedResources, ResourceKey, Duration, FeedbackType, LanguageLevel, Style, TargetAudience, Tone } from "../types";
 
 const API_KEY = process.env.API_KEY;
 
@@ -8,6 +8,19 @@ if (!API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+const pedagogyMetadataProperties = {
+  actionVerb: { type: Type.STRING, description: "Le verbe d'action principal (Taxonomie de Bloom) pour cette ressource." },
+  furtherReading: {
+    type: Type.OBJECT,
+    description: "Section 'Pour aller plus loin' avec bibliographie et pistes d'application.",
+    properties: {
+      bibliography: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Bibliographie au format APA." },
+      applicationIdeas: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Pistes d'application concrètes." },
+    },
+    required: ["bibliography", "applicationIdeas"],
+  },
+};
 
 const SCHEMAS: { [key in ResourceKey]: any } = {
   quiz: {
@@ -28,8 +41,9 @@ const SCHEMAS: { [key in ResourceKey]: any } = {
           required: ["questionText", "options", "correctAnswerIndex", "explanation"],
         },
       },
+      ...pedagogyMetadataProperties,
     },
-    required: ["title", "questions"],
+    required: ["title", "questions", "actionVerb", "furtherReading"],
   },
   caseStudy: {
     type: Type.OBJECT,
@@ -38,8 +52,9 @@ const SCHEMAS: { [key in ResourceKey]: any } = {
       title: { type: Type.STRING, description: "Titre du cas pratique" },
       scenario: { type: Type.STRING, description: "Le scénario détaillé du cas pratique" },
       questions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Un tableau de questions pour guider la réflexion de l'apprenant" },
+      ...pedagogyMetadataProperties,
     },
-    required: ["title", "scenario", "questions"],
+    required: ["title", "scenario", "questions", "actionVerb", "furtherReading"],
   },
   infographic: {
     type: Type.OBJECT,
@@ -56,9 +71,10 @@ const SCHEMAS: { [key in ResourceKey]: any } = {
           },
           required: ["header", "points"],
         }
-      }
+      },
+      ...pedagogyMetadataProperties,
     },
-    required: ["title", "sections"],
+    required: ["title", "sections", "actionVerb", "furtherReading"],
   },
   videoScript: {
     type: Type.OBJECT,
@@ -77,8 +93,9 @@ const SCHEMAS: { [key in ResourceKey]: any } = {
           required: ["sceneNumber", "visuals", "narration"],
         },
       },
+      ...pedagogyMetadataProperties,
     },
-    required: ["title", "scenes"],
+    required: ["title", "scenes", "actionVerb", "furtherReading"],
   },
   collaborativeActivity: {
     type: Type.OBJECT,
@@ -88,8 +105,34 @@ const SCHEMAS: { [key in ResourceKey]: any } = {
       objective: { type: Type.STRING, description: "L'objectif pédagogique de l'activité" },
       instructions: { type: Type.STRING, description: "Les instructions détaillées pour mener l'activité" },
       duration: { type: Type.STRING, description: "Durée estimée de l'activité (ex: '25 minutes')" },
+      ...pedagogyMetadataProperties,
     },
-    required: ["title", "objective", "instructions", "duration"],
+    required: ["title", "objective", "instructions", "duration", "actionVerb", "furtherReading"],
+  },
+  evaluation: {
+    type: Type.OBJECT,
+    description: "Évaluation pédagogique (initiale, formative ou sommative) avec différents types de questions.",
+    properties: {
+      title: { type: Type.STRING, description: "Titre de l'évaluation" },
+      evaluationType: { type: Type.STRING, enum: ['Initiale', 'Formative', 'Sommative'], description: "Le type d'évaluation" },
+      instructions: { type: Type.STRING, description: "Instructions pour l'apprenant" },
+      questions: {
+          type: Type.ARRAY,
+          items: {
+              type: Type.OBJECT,
+              properties: {
+                  questionText: { type: Type.STRING, description: "Le texte de la question" },
+                  questionType: { type: Type.STRING, enum: ['QCM', 'Ouverte', 'Vrai/Faux'], description: "Le type de question" },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Options de réponse pour un QCM" },
+                  correctAnswer: { type: Type.STRING, description: "La bonne réponse pour une question Vrai/Faux ou QCM" },
+                  explanation: { type: Type.STRING, description: "Explication de la bonne réponse" },
+              },
+              required: ["questionText", "questionType"],
+          },
+      },
+      ...pedagogyMetadataProperties,
+    },
+    required: ["title", "evaluationType", "instructions", "questions", "actionVerb", "furtherReading"],
   },
 };
 
@@ -100,6 +143,7 @@ const getResourcePromptName = (resourceKey: ResourceKey): string => {
         case 'infographic': return 'Le contenu textuel pour une infographie';
         case 'videoScript': return 'Un script de vidéo courte';
         case 'collaborativeActivity': return 'Une activité collaborative';
+        case 'evaluation': return 'Une évaluation pédagogique';
     }
 }
 
@@ -107,6 +151,18 @@ export const generateSingleResource = async (
   resourceType: ResourceKey,
   config: GenerationConfig
 ): Promise<GeneratedResources[ResourceKey]> => {
+
+  const contextLines = [
+    `- Contenu source à transformer : """${config.sourceContent}"""`,
+    `- Niveau de la taxonomie de Bloom visé : "${config.bloomLevel}"`,
+    config.targetAudience !== TargetAudience.None && `- Public cible : "${config.targetAudience}"`,
+    config.duration !== Duration.None && `- Durée de la ressource : "${config.duration}"`,
+    config.style !== Style.None && `- Style de communication : "${config.style}"`,
+    config.tone !== Tone.None && `- Ton à employer : "${config.tone}"`,
+    config.languageLevel !== LanguageLevel.None && `- Niveau linguistique attendu : "${config.languageLevel}"`,
+    config.feedbackType !== FeedbackType.None && `- Type de feedback à intégrer (si applicable) : "${config.feedbackType}"`
+  ].filter(Boolean).join("\n    ");
+
   const prompt = `
     RÈGLES STRICTES :
     1.  RIGUEUR SCIENTIFIQUE : Le contenu généré doit être factuellement exact et fidèle au contenu source.
@@ -114,14 +170,7 @@ export const generateSingleResource = async (
     3.  FORMAT DE SORTIE : Tu dois impérativement retourner une réponse au format JSON qui respecte le schéma fourni pour le type de ressource demandé. Ne retourne rien d'autre.
 
     CONTEXTE DE LA TÂCHE :
-    - Contenu source à transformer : """${config.sourceContent}"""
-    - Public cible : "${config.targetAudience}"
-    - Niveau de la taxonomie de Bloom visé : "${config.bloomLevel}"
-    - Durée de la ressource : "${config.duration}"
-    - Style de communication : "${config.style}"
-    - Ton à employer : "${config.tone}"
-    - Niveau linguistique attendu : "${config.languageLevel}"
-    - Type de feedback à intégrer (si applicable, pour le quiz par ex.) : "${config.feedbackType}"
+    ${contextLines}
 
     TA MISSION :
     À partir du contenu source et des contraintes ci-dessus, génère la ressource pédagogique suivante : ${getResourcePromptName(resourceType)}.
